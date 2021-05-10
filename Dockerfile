@@ -5,7 +5,7 @@ FROM ruby:2.7.3-slim AS builder
 
 RUN apt-get update && \
   apt-get install -qq -y --no-install-recommends \
-  build-essential ca-certificates git curl wget gnupg pkg-config libpq-dev libxml2-dev libxslt-dev shared-mime-info
+  build-essential ca-certificates git curl wget gnupg pkg-config libpq-dev libxml2-dev libxslt-dev shared-mime-info sqlite3 libsqlite3-dev
 
 ADD https://dl.yarnpkg.com/debian/pubkey.gpg /tmp/yarn-pubkey.gpg
 RUN apt-key add /tmp/yarn-pubkey.gpg && rm /tmp/yarn-pubkey.gpg
@@ -30,15 +30,9 @@ WORKDIR /app
 # Install gems
 ADD Gemfile* ./
 
-RUN gem install bundler:2.1.4
 RUN bundle config set jobs `expr $(cat /proc/cpuinfo | grep -c 'cpu cores') - 1`
 RUN bundle config build.nokogiri --use-system-libraries
-RUN bundle install \
-  && find vendor/bundle -name "*.c" -delete \
-  && find vendor/bundle -name "*.o" -delete \
-  && find vendor/bundle -name "*.gem" -delete
-
-# RUN du -h -c -d 4 .
+RUN bundle install
 
 # Install yarn packages
 COPY package.json yarn.lock /app/
@@ -47,15 +41,11 @@ RUN yarn install
 # Add the Rails app
 ADD . /app
 
-# RUN du -h -c -d 4 .
-
 # Precompile assets
 RUN bundle exec rake assets:precompile
 
 # Remove folders not needed in resulting image
 RUN rm -rf spec node_modules vendor/assets lib/assets tmp/cache
-
-# RUN du -h -c -d 4 .
 
 ##########################################################################
 #### RUNTIME CONTAINER
@@ -65,7 +55,7 @@ FROM ruby:2.7.3-slim
 # Install dependencies to build gems
 RUN apt-get update && \
   apt-get install -qq -y --no-install-recommends \
-  ca-certificates git curl wget libpq5 libxml2 libxslt1.1 nodejs shared-mime-info && \
+  ca-certificates git curl wget libpq5 libxml2 libxslt1.1 nodejs shared-mime-info sqlite3 libsqlite3-dev && \
   rm -rf /var/lib/apt/lists/*
 
 # Add user
